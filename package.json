@@ -9,10 +9,13 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@tanstack/react-table": "^8.21.2",
+    "@types/xlsx": "^0.0.36",
     "next": "latest",
     "pocketbase": "^0.25.1",
     "react": "latest",
-    "react-dom": "latest"
+    "react-dom": "latest",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/node": "22.13.5",
