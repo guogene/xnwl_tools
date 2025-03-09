@@ -1,3 +1,6 @@
 import PocketBase from 'pocketbase';
 
-export const pb = new PocketBase('http://127.0.0.1:8090'); // 替换为你的 PocketBase 服务器地址 
+// 从环境变量获取 PocketBase URL，如果未设置则使用默认值
+const POCKETBASE_URL = process.env.NEXT_PUBLIC_POCKETBASE_URL || 'http://127.0.0.1:8090';
+
+export const pb = new PocketBase(POCKETBASE_URL); 
