@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { PerformanceData } from '@/types/performance'
 import { getPerformanceList } from './actions'
 
-export default function PerformanceList() {
+// 将主要内容移到一个新组件中
+function PerformanceListContent() {
   const [data, setData] = useState<PerformanceData[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const searchParams = useSearchParams()
@@ -178,5 +179,18 @@ export default function PerformanceList() {
         }
       `}</style>
     </div>
+  )
+}
+
+// 导出默认组件，使用 Suspense 包裹内容组件
+export default function PerformanceListPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-gray-600">加载中...</div>
+      </div>
+    }>
+      <PerformanceListContent />
+    </Suspense>
   )
 } 
