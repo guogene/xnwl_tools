@@ -8,9 +8,10 @@ export async function getEmployees() {
   try {
     const records = await pb.collection('performance').getFullList({
       fields: 'name',
-      groupBy: 'name',
     })
-    return [...new Set(records.map(record => record.name))].filter(Boolean)
+    const names = records.map(record => record.name)
+    const uniqueNames = Array.from(new Set(names))
+    return uniqueNames.filter(Boolean)
   } catch (error) {
     console.error('Error fetching employees:', error)
     return []
