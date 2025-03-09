@@ -11,7 +11,7 @@ export async function login(formData: FormData) {
     )
 
     // 设置 cookie
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     cookieStore.set('token', pb.authStore.token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',

@@ -5,11 +5,10 @@ import { pb } from '@/lib/pocketbase'
 
 export async function logout() {
   try {
-    // 清除 PocketBase 认证状态
     pb.authStore.clear()
     
     // 清除 cookie
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     cookieStore.delete('token')
     
     return { success: true }
@@ -17,4 +16,4 @@ export async function logout() {
     console.error('Logout error:', error)
     return { success: false, error: '退出登录失败' }
   }
-} 
+}
