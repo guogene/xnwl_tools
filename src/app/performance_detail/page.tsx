@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { PerformanceData } from '@/types/performance'
 import { getEmployeePerformance, getEmployeePerformanceByDateRange } from './actions'
@@ -11,7 +11,7 @@ import { zhCN } from 'date-fns/locale/zh-CN'
 
 registerLocale('zh-CN', zhCN)
 
-export default function PerformanceDetail() {
+function PerformanceDetailContent() {
   const [data, setData] = useState<PerformanceData[]>([])
   const [rangeData, setRangeData] = useState<PerformanceData[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -227,5 +227,13 @@ export default function PerformanceDetail() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function PerformanceDetailPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <PerformanceDetailContent />
+    </Suspense>
   )
 } 
