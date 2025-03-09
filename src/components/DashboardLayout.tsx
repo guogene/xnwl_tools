@@ -1,8 +1,9 @@
 'use client'
 
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useState } from 'react'
+import { logout } from '@/app/dashboard/actions'
 
 interface NavItem {
   name: string
@@ -46,6 +47,7 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   const pathname = usePathname()
+  const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
 
   async function handleLogout() {

@@ -32,15 +32,8 @@ export default function Login() {
       <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow-lg">
         {/* Logo 部分 */}
         <div className="flex flex-col items-center">
-          <Image
-            className="h-12 w-auto"
-            src="/images/next.svg"
-            alt="Logo"
-            width={180}
-            height={37}
-            priority
-          />
-          <h2 className="mt-6 text-3xl font-bold text-gray-900">
+          <h1 className="text-3xl font-bold text-gray-900">兴宁物流</h1>
+          <h2 className="mt-6 text-lg text-gray-900">
             登录到您的账户
           </h2>
         </div>

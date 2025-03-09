@@ -10,10 +10,12 @@
   },
   "dependencies": {
     "@tanstack/react-table": "^8.21.2",
+    "@types/react-datepicker": "^7.0.0",
     "@types/xlsx": "^0.0.36",
     "next": "latest",
     "pocketbase": "^0.25.1",
     "react": "latest",
+    "react-datepicker": "^8.1.0",
     "react-dom": "latest",
     "xlsx": "^0.18.5"
   },

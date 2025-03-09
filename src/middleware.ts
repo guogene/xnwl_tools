@@ -7,7 +7,7 @@ export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname
 
   // 定义公开路径
-  const publicPath = ['/login', '/images']
+  const publicPath = ['/login', '/images', '/performance_detail', '/performance_list']
   
   // 获取token
   const token = request.cookies.get('token')?.value
@@ -54,6 +54,6 @@ export const config = {
      * - favicon.ico (favicon file)
      * - public folder
      */
-    '/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:jpg|jpeg|gif|png|svg|ico)$).*)',
+    '/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:jpg|jpeg|gif|png|svg|ico|txt)$).*)',
   ],
 } 

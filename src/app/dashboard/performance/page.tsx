@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { PerformanceData, PerformanceDataList } from '@/types/performance'
 import * as XLSX from 'xlsx'
 import {
@@ -9,20 +9,28 @@ import {
   getCoreRowModel,
   useReactTable,
 } from '@tanstack/react-table'
+import { 
+  getEmployees, 
+  getEmployeePerformance, 
+  upsertPerformance, 
+  batchUpsertPerformance,
+  deleteEmployeeData 
+} from './actions'
 
 const columnHelper = createColumnHelper<PerformanceData>()
-
-// 模拟员工数据，实际应该从API获取
-const employees = [
-  { id: '1', name: '张三' },
-  { id: '2', name: '李四' },
-  { id: '3', name: '王五' },
-]
 
 const columns = [
   columnHelper.accessor('date', {
     header: '日期',
-    cell: info => info.getValue(),
+    cell: info => {
+      const date = info.getValue()
+      if (!date) return ''
+      try {
+        return new Date(date).toISOString().split('T')[0]
+      } catch (e) {
+        return date
+      }
+    },
   }),
   columnHelper.accessor('pickupCount', {
     header: '收件票数',
@@ -93,6 +101,29 @@ export default function Performance() {
   const [isLoading, setIsLoading] = useState(false)
   const [selectedEmployee, setSelectedEmployee] = useState('')
   const [editingData, setEditingData] = useState<PerformanceData | null>(null)
+  const [employees, setEmployees] = useState<string[]>([])
+
+  // 加载员工列表
+  useEffect(() => {
+    async function loadEmployees() {
+      const employeeList = await getEmployees()
+      setEmployees(employeeList)
+    }
+    loadEmployees()
+  }, [])
+
+  // 加载选中员工的数据
+  useEffect(() => {
+    async function loadEmployeeData() {
+      if (selectedEmployee) {
+        setIsLoading(true)
+        const performanceData = await getEmployeePerformance(selectedEmployee)
+        setData(performanceData)
+        setIsLoading(false)
+      }
+    }
+    loadEmployeeData()
+  }, [selectedEmployee])
 
   const table = useReactTable({
     data,
@@ -121,8 +152,7 @@ export default function Performance() {
       if (!file) return
 
       const reader = new FileReader()
-      reader.onload = (e) => {
-        // const data = new Uint8Array(e.target?.result as ArrayBuffer)
+      reader.onload = async (e) => {
         const workbook = XLSX.read(e.target?.result, { type: 'buffer' })
         
         const sheet = workbook.Sheets[workbook.SheetNames[0]]; 
@@ -178,27 +208,70 @@ export default function Performance() {
             deliveryShare: item.派件分成 !== null ? parseFloat(item.派件分成) : null,
           }))
         }
-        setData(performanceDataList.list)
+
+        // 保存到数据库
+        const result = await batchUpsertPerformance(performanceDataList.name, performanceDataList.list)
+        if (result.success) {
+          // 刷新数据
+          const updatedData = await getEmployeePerformance(performanceDataList.name)
+          setData(updatedData)
+          setSelectedEmployee(performanceDataList.name)
+          
+          // 刷新员工列表
+          const employeeList = await getEmployees()
+          setEmployees(employeeList)
+        } else {
+          alert(result.error)
+        }
       }
       reader.readAsArrayBuffer(file)
     } catch (error) {
-      console.error('Error parsing Excel file:', error)
+      console.error('Error handling file upload:', error)
+      alert('导入失败')
     } finally {
       setIsLoading(false)
     }
   }
 
-  const handleDeleteEmployeeData = () => {
+  const handleDeleteEmployeeData = async () => {
     if (!selectedEmployee) {
       alert('请先选择员工')
       return
     }
 
     if (confirm('确定要删除该员工的所有数据吗？')) {
-      // 这里应该调用API删除数据
-      setData([])
-      alert('删除成功')
+      setIsLoading(true)
+      const result = await deleteEmployeeData(selectedEmployee)
+      if (result.success) {
+        setData([])
+        setSelectedEmployee('')
+        const employeeList = await getEmployees()
+        setEmployees(employeeList)
+      } else {
+        alert(result.error)
+      }
+      setIsLoading(false)
     }
+  }
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingData || !selectedEmployee) return
+
+    setIsLoading(true)
+    const result = await upsertPerformance({
+      ...editingData,
+      name: selectedEmployee,
+    })
+
+    if (result.success) {
+      const updatedData = await getEmployeePerformance(selectedEmployee)
+      setData(updatedData)
+      setEditingData(null)
+    } else {
+      alert(result.error)
+    }
+    setIsLoading(false)
   }
 
   return (
@@ -214,8 +287,8 @@ export default function Performance() {
           >
             <option value="">请选择员工</option>
             {employees.map(employee => (
-              <option key={employee.id} value={employee.id}>
-                {employee.name}
+              <option key={employee} value={employee}>
+                {employee}
               </option>
             ))}
           </select>
@@ -316,21 +389,11 @@ export default function Performance() {
                 </svg>
               </button>
             </div>
-            <form onSubmit={(e) => {
-              e.preventDefault()
-              // 处理表单提交
-              setEditingData(null)
-            }}>
+            <form onSubmit={handleEditSubmit}>
               <div className="grid grid-cols-3 gap-4">
                 {/* 日期 */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">日期</label>
-                  <input
-                    type="date"
-                    value={editingData.date}
-                    onChange={(e) => setEditingData({...editingData, date: e.target.value})}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                  />
+                  <label className="block text-sm font-medium text-gray-700">日期： {new Date(editingData.date).toISOString().split('T')[0]}</label>
                 </div>
 
                 {/* 收件票数 */}
