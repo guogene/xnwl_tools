@@ -35,6 +35,9 @@ export async function getEmployeePerformance(name: string) {
 // 更新或创建业绩数据
 export async function upsertPerformance(data: PerformanceData & { name: string }) {
   try {
+    if (data.date === null || data.date === undefined) {
+      return { error: "日期不能为空" }
+    }
     // 检查是否存在相同日期和姓名的记录
     const existingRecords = await pb.collection('performance').getFullList({
       filter: `name = "${data.name}" && date = "${data.date}"`,
