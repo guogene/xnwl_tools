@@ -20,8 +20,10 @@ export async function GET(request: Request) {
     // }
 
     // 创建重定向响应，将用户名作为URL参数传递
-    const redirectUrl = new URL('/performance_detail', request.url)
+    const redirectUrl = new URL('/performance_detail', process.env.BASE_URL)
     redirectUrl.searchParams.set('temp_username', userDetail.name)
+    // console.log("request url", request.url)
+    // console.log("redirectUrl", redirectUrl.toString())
     
     return NextResponse.redirect(redirectUrl)
 
