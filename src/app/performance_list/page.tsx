@@ -1,22 +1,42 @@
 'use client'
 
 import { useState, useEffect, Suspense } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { PerformanceData } from '@/types/performance'
 import { getPerformanceList } from './actions'
+import { Watermark } from 'watermark-js-plus';
 
 // 将主要内容移到一个新组件中
 function PerformanceListContent() {
   const [data, setData] = useState<PerformanceData[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const searchParams = useSearchParams()
-  const name = searchParams.get('name')
+  const router = useRouter()
+  // const name = searchParams.get('name')
   const startDate = searchParams.get('startDate')
   const endDate = searchParams.get('endDate')
+
+  const [name, setName] = useState<string>('')
+
+  useEffect(() => {
+    // 首先尝试从sessionStorage获取
+    const storedName = sessionStorage.getItem('name')
+    if (storedName) {
+      setName(storedName)
+      return
+    }
+  }, [router])
 
   useEffect(() => {
     async function loadData() {
       if (name && startDate && endDate) {
+        const watermark = new Watermark({
+          content: name,
+          width: 120,
+          height: 100,
+          globalAlpha: 0.1,
+      })
+        watermark.create();
         const performanceData = await getPerformanceList(name, startDate, endDate)
         setData(performanceData)
       }

@@ -8,6 +8,7 @@ import DatePicker from 'react-datepicker'
 import "react-datepicker/dist/react-datepicker.css"
 import { registerLocale } from "react-datepicker"
 import { zhCN } from 'date-fns/locale/zh-CN'
+import { Watermark } from 'watermark-js-plus';
 
 registerLocale('zh-CN', zhCN)
 
@@ -17,7 +18,31 @@ function PerformanceDetailContent() {
   const [isLoading, setIsLoading] = useState(true)
   const searchParams = useSearchParams()
   const router = useRouter()
-  const name = searchParams.get('name')
+
+  const [name, setName] = useState<string>('')
+
+  useEffect(() => {
+    // 首先尝试从sessionStorage获取
+    const storedName = sessionStorage.getItem('name')
+    
+    if (storedName) {
+      setName(storedName)
+      return
+    }
+
+    // 如果sessionStorage中没有，则从URL参数获取
+    const tempUsername = searchParams.get('temp_username')
+    
+    if (tempUsername) {
+      // 存入sessionStorage
+      sessionStorage.setItem('name', tempUsername)
+      setName(tempUsername)
+      // 移除URL参数并更新历史记录
+      const newSearchParams = new URLSearchParams(searchParams.toString())
+      newSearchParams.delete('temp_username')
+      router.replace(`/performance_detail${newSearchParams.toString() ? `?${newSearchParams.toString()}` : ''}`)
+    }
+  }, [searchParams, router])
   
   // 从 URL 参数中获取日期范围
   const urlStartDate = searchParams.get('startDate')
@@ -35,6 +60,14 @@ function PerformanceDetailContent() {
   useEffect(() => {
     async function loadData() {
       if (name) {
+        const watermark = new Watermark({
+          content: name,
+          width: 120,
+          height: 100,
+          globalAlpha: 0.1,
+      })
+        watermark.create();
+
         const today = new Date()
         const threeDaysAgo = new Date(today)
         threeDaysAgo.setDate(today.getDate() - 2)
@@ -131,6 +164,7 @@ function PerformanceDetailContent() {
   }
 
   return (
+    // <Watermark text="测试水印" style={{ overflow: 'hidden' }}>
     <div className="min-h-screen bg-gray-50 p-2">
       {/* 顶部导航栏 */}
       <div className="bg-white px-4 py-3 flex items-center border-b">
@@ -227,13 +261,16 @@ function PerformanceDetailContent() {
         </div>
       </div>
     </div>
+    // </Watermark>
   )
 }
 
 export default function PerformanceDetailPage() {
   return (
     <Suspense fallback={<div>Loading...</div>}>
+      
       <PerformanceDetailContent />
+      
     </Suspense>
   )
 } 
