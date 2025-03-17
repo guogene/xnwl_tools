@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { PerformanceData, PerformanceDataList } from '@/types/performance'
+import { DailyPerformanceData, DailyPerformanceDataList } from '@/types/daily_performance'
 import * as XLSX from 'xlsx'
 import {
   createColumnHelper,
@@ -17,7 +17,7 @@ import {
   deleteEmployeeData 
 } from './actions'
 
-const columnHelper = createColumnHelper<PerformanceData>()
+const columnHelper = createColumnHelper<DailyPerformanceData>()
 
 const columns = [
   columnHelper.accessor('date', {
@@ -39,30 +39,6 @@ const columns = [
   columnHelper.accessor('weight', {
     header: '重量',
     cell: info => info.getValue(),
-  }),
-  columnHelper.accessor('quantity', {
-    header: '件数',
-    cell: info => info.getValue(),
-  }),
-  columnHelper.accessor('freight', {
-    header: '运费',
-    cell: info => info.getValue().toFixed(2),
-  }),
-  columnHelper.accessor('transferFee', {
-    header: '中转费',
-    cell: info => info.getValue().toFixed(2),
-  }),
-  columnHelper.accessor('scanningFee', {
-    header: '扫描费',
-    cell: info => info.getValue().toFixed(2),
-  }),
-  columnHelper.accessor('fundFee', {
-    header: '基金费',
-    cell: info => info.getValue().toFixed(2),
-  }),
-  columnHelper.accessor('electronicOrder', {
-    header: '电子单',
-    cell: info => info.getValue().toFixed(2),
   }),
   columnHelper.accessor('pickupShare', {
     header: '收件分成',
@@ -96,11 +72,11 @@ const columns = [
   }),
 ]
 
-export default function Performance() {
-  const [data, setData] = useState<PerformanceData[]>([])
+export default function DailyPerformance() {
+  const [data, setData] = useState<DailyPerformanceData[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [selectedEmployee, setSelectedEmployee] = useState('')
-  const [editingData, setEditingData] = useState<PerformanceData | null>(null)
+  const [editingData, setEditingData] = useState<DailyPerformanceData | null>(null)
   const [employees, setEmployees] = useState<string[]>([])
 
   // 加载员工列表
@@ -130,19 +106,16 @@ export default function Performance() {
     columns,
     getCoreRowModel: getCoreRowModel(),
     meta: {
-      onEdit: (data: PerformanceData) => {
+      onEdit: (data: DailyPerformanceData) => {
         setEditingData(data)
       },
     },
   })
 
   const excelDateToJSDate = (excelDate: number) => {
-    // Excel 日期从 1900-01-01 开始，且错误地将1900年视为闰年
-    // 调整公式：Unix时间戳 = (Excel天数 - 25569) * 86400 * 1000
-    const jsTimestamp = (excelDate - 25569) * 86400 * 1000;
-    const jsDate = new Date(jsTimestamp);
-    // 格式化为 YYYY-MM-DD
-    return jsDate.toISOString().split('T')[0];
+    const jsTimestamp = (excelDate - 25569) * 86400 * 1000
+    const jsDate = new Date(jsTimestamp)
+    return jsDate.toISOString().split('T')[0]
   }
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -154,70 +127,61 @@ export default function Performance() {
       const reader = new FileReader()
       reader.onload = async (e) => {
         const workbook = XLSX.read(e.target?.result, { type: 'buffer' })
+        const sheet = workbook.Sheets[workbook.SheetNames[0]]
         
-        const sheet = workbook.Sheets[workbook.SheetNames[0]]; 
-        const range = XLSX.utils.decode_range(sheet['!ref']);
+        // 获取员工姓名
+        const nameCell = sheet['A1']
+        const name = nameCell ? nameCell.v : null
+
+        // 获取数据范围
+        const range = XLSX.utils.decode_range(sheet['!ref'])
         
-        // 提取表头（第三行）
-        const headers = [];
+        // 提取表头（第二行）
+        const headers = []
         for (let col = range.s.c; col <= range.e.c; col++) {
-            const cellAddress = XLSX.utils.encode_cell({ r: 1, c: col });
-            const cell = sheet[cellAddress];
-            if (headers.indexOf(cell ? cell.v : null) === -1) {
-              headers[col] = cell ? cell.v : null;
-            } else {
-              headers[col] = cell ? "派件"+cell.v : null;
-            }
+          const cellAddress = XLSX.utils.encode_cell({ r: 1, c: col })
+          const cell = sheet[cellAddress]
+          headers[col] = cell ? cell.v : null
         }
 
-        // 提取数据行
-        const list = [];
+        // 提取数据行（从第三行开始）
+        const list = []
         for (let row = 2; row <= range.e.r; row++) {
-            const rowData = {};
-            let isEmpty = true;
+          const rowData = {}
+          let isEmpty = true
 
-            for (let col = range.s.c; col <= range.e.c; col++) {
-                const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
-                const cell = sheet[cellAddress];
-                const value = cell ? cell.v : null;
-                rowData[headers[col]] = value;
-                if (value !== null) isEmpty = false;
-            }
+          for (let col = range.s.c; col <= range.e.c; col++) {
+            const cellAddress = XLSX.utils.encode_cell({ r: row, c: col })
+            const cell = sheet[cellAddress]
+            const value = cell ? cell.v : null
+            rowData["col_"+col] = value
+            if (value !== null) isEmpty = false
+          }
 
-            if (!isEmpty) list.push(rowData);
+          if (!isEmpty) list.push(rowData)
         }
 
-        // 构建 JSON（处理日期）
-        const nameCell = sheet['A1'];
-        const name = nameCell ? nameCell.v : null;
-        const performanceDataList: PerformanceDataList = {
+        // 构建数据列表
+        const performanceDataList: DailyPerformanceDataList = {
           name: name,
           list: list.map(item => ({
-            date: item.日期 !== null ? excelDateToJSDate(item.日期) : null,
-            pickupCount: item.收件票数 !== null ? parseInt(item.收件票数) : null,
-            weight: item.重量 !== null ? parseFloat(item.重量) : null,
-            quantity: item.件数 !== null ? parseInt(item.件数) : null,
-            freight: item.运费 !== null ? parseFloat(item.运费) : null,
-            transferFee: item.中转费 !== null ? parseFloat(item.中转费) : null,
-            scanningFee: item.扫描费 !== null ? parseFloat(item.扫描费) : null,
-            fundFee: item.基金费 !== null ? parseFloat(item.基金费) : null,
-            electronicOrder: item.电子单 !== null ? parseFloat(item.电子单) : null,
-            pickupShare: item.收件分成 !== null ? parseFloat(item.收件分成) : null,
-            deliveryCount: item.派件票数 !== null ? parseInt(item.派件票数) : null,
-            deliveryWeight: item.派件重量 !== null ? parseFloat(item.派件重量) : null,
-            deliveryShare: item.派件分成 !== null ? parseFloat(item.派件分成) : null,
+            date: item.col_0 ? excelDateToJSDate(item.col_0) : null,
+            pickupCount: item.col_1 ? parseInt(item.col_1) : 0,
+            weight: item.col_2 ? parseFloat(item.col_2) : 0,
+            pickupShare: item.col_3 ? parseFloat(item.col_3) : 0,
+            deliveryCount: item.col_4 ? parseInt(item.col_4) : 0,
+            deliveryWeight: item.col_5 ? parseFloat(item.col_5) : 0,
+            deliveryShare: item.col_6 ? parseFloat(item.col_6) : 0,
           }))
         }
 
         // 保存到数据库
         const result = await batchUpsertPerformance(performanceDataList.name, performanceDataList.list)
         if (result.success) {
-          // 刷新数据
           const updatedData = await getEmployeePerformance(performanceDataList.name)
           setData(updatedData)
           setSelectedEmployee(performanceDataList.name)
           
-          // 刷新员工列表
           const employeeList = await getEmployees()
           setEmployees(employeeList)
         } else {
@@ -277,7 +241,7 @@ export default function Performance() {
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">月报业绩管理</h2>
+        <h2 className="text-2xl font-bold text-gray-900">日报业绩管理</h2>
         <div className="flex items-center space-x-4">
           {/* 员工选择 */}
           <select
@@ -316,7 +280,7 @@ export default function Performance() {
           <label
             htmlFor="excel-upload"
             className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 cursor-pointer ${
-              (isLoading) ? 'opacity-50 cursor-not-allowed' : ''
+              isLoading ? 'opacity-50 cursor-not-allowed' : ''
             }`}
           >
             {isLoading ? '导入中...' : '导入 Excel'}
@@ -324,6 +288,7 @@ export default function Performance() {
         </div>
       </div>
 
+      {/* 数据表格 */}
       <div className="mt-4 flex flex-col">
         <div className="-my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
           <div className="py-2 align-middle inline-block min-w-full sm:px-6 lg:px-8">
@@ -375,7 +340,7 @@ export default function Performance() {
       {/* 编辑弹窗 */}
       {editingData && (
         <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center">
-          <div className="bg-white rounded-lg p-6 max-w-4xl w-full">
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-medium text-gray-900">编辑数据</h3>
               <button
@@ -390,10 +355,12 @@ export default function Performance() {
               </button>
             </div>
             <form onSubmit={handleEditSubmit}>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 {/* 日期 */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">日期： {new Date(editingData.date).toISOString().split('T')[0]}</label>
+                  <label className="block text-sm font-medium text-gray-700">
+                    日期：{new Date(editingData.date).toISOString().split('T')[0]}
+                  </label>
                 </div>
 
                 {/* 收件票数 */}
@@ -415,77 +382,6 @@ export default function Performance() {
                     step="0.01"
                     value={editingData.weight}
                     onChange={(e) => setEditingData({...editingData, weight: parseFloat(e.target.value) || 0})}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                  />
-                </div>
-
-                {/* 件数 */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">件数</label>
-                  <input
-                    type="number"
-                    value={editingData.quantity}
-                    onChange={(e) => setEditingData({...editingData, quantity: parseInt(e.target.value) || 0})}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                  />
-                </div>
-
-                {/* 运费 */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">运费</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={editingData.freight}
-                    onChange={(e) => setEditingData({...editingData, freight: parseFloat(e.target.value) || 0})}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                  />
-                </div>
-
-                {/* 中转费 */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">中转费</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={editingData.transferFee}
-                    onChange={(e) => setEditingData({...editingData, transferFee: parseFloat(e.target.value) || 0})}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                  />
-                </div>
-
-                {/* 扫描费 */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">扫描费</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={editingData.scanningFee}
-                    onChange={(e) => setEditingData({...editingData, scanningFee: parseFloat(e.target.value) || 0})}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                  />
-                </div>
-
-                {/* 基金费 */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">基金费</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={editingData.fundFee}
-                    onChange={(e) => setEditingData({...editingData, fundFee: parseFloat(e.target.value) || 0})}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                  />
-                </div>
-
-                {/* 电子单 */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">电子单</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={editingData.electronicOrder}
-                    onChange={(e) => setEditingData({...editingData, electronicOrder: parseFloat(e.target.value) || 0})}
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                   />
                 </div>

@@ -5,10 +5,29 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { PerformanceData } from '@/types/performance'
 import { getPerformanceList } from './actions'
 import { Watermark } from 'watermark-js-plus';
+import DatePicker from 'react-datepicker'
+import "react-datepicker/dist/react-datepicker.css"
+import { registerLocale } from "react-datepicker"
+import { zhCN } from 'date-fns/locale/zh-CN'
+import dayjs from 'dayjs'
+import 'dayjs/locale/zh-cn'
+
+registerLocale('zh-CN', zhCN)
+
+interface PerformanceRecord {
+  name: string;
+  date: string;
+  pickupCount: number;
+  weight: number;
+  pickupShare: number;
+  deliveryCount: number;
+  deliveryWeight: number;
+  deliveryShare: number;
+}
 
 // 将主要内容移到一个新组件中
 function PerformanceListContent() {
-  const [data, setData] = useState<PerformanceData[]>([])
+  const [data, setData] = useState<PerformanceRecord[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -17,6 +36,14 @@ function PerformanceListContent() {
   const endDate = searchParams.get('endDate')
 
   const [name, setName] = useState<string>('')
+  
+  // 默认选择上个月
+  const [selectedMonth, setSelectedMonth] = useState<Date>(() => {
+    const lastMonth = dayjs().subtract(1, 'month').toDate()
+    return lastMonth
+  })
+
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false)
 
   useEffect(() => {
     // 首先尝试从sessionStorage获取
@@ -27,23 +54,20 @@ function PerformanceListContent() {
     }
   }, [router])
 
+  // 根据选择的月份加载数据
   useEffect(() => {
     async function loadData() {
-      if (name && startDate && endDate) {
-        const watermark = new Watermark({
-          content: name,
-          width: 120,
-          height: 100,
-          globalAlpha: 0.1,
-      })
-        watermark.create();
+      if (name) {
+        const startDate = dayjs(selectedMonth).startOf('month').format('YYYY-MM-DD')
+        const endDate = dayjs(selectedMonth).endOf('month').format('YYYY-MM-DD')
+        
         const performanceData = await getPerformanceList(name, startDate, endDate)
         setData(performanceData)
       }
       setIsLoading(false)
     }
     loadData()
-  }, [name, startDate, endDate])
+  }, [name, selectedMonth])
 
   // 格式化日期显示，添加年份
   const formatDate = (dateStr: string) => {
@@ -58,6 +82,14 @@ function PerformanceListContent() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-gray-600">加载中...</div>
+      </div>
+    )
+  }
+
+  if (!name) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-red-600">缺少必要的参数</div>
       </div>
     )
   }
@@ -77,101 +109,117 @@ function PerformanceListContent() {
       {/* 表格容器 */}
       <div className="p-4">
         {/* 日期范围显示 */}
-        <div className="mb-4 text-gray-600 font-bold text-2xl">
-          {startDate && endDate ? `${formatDate(startDate)} - ${formatDate(endDate)}` : ''}
+        <div className="mb-4 text-gray-600 font-bold text-2xl relative">
+          {/* 月份选择器 */}
+          <DatePicker
+            selected={selectedMonth}
+            onChange={(date: Date) => setSelectedMonth(date)}
+            dateFormat="yyyy年MM月"
+            showMonthYearPicker
+            className="px-3 py-2 border rounded-lg text-sm"
+            locale="zh-CN"
+            maxDate={new Date()}
+            popperClassName="z-50"
+            popperPlacement="bottom-start"
+            onCalendarOpen={() => setIsDatePickerOpen(true)}
+            onCalendarClose={() => setIsDatePickerOpen(false)}
+          />
         </div>
 
-        <div className="bg-white rounded-lg shadow relative">
-          {/* 添加一个外层容器，设置最大高度和滚动 */}
-          <div className="max-h-[calc(100vh-120px)] overflow-auto">
-            <table className="min-w-full divide-y divide-gray-200 relative">
-              <thead className="bg-gray-50 sticky top-0 z-30">
-                <tr>
-                  {/* 日期表头 - 最高层级 */}
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase sticky left-0 bg-gray-50 z-40 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
-                    日期
-                  </th>
-                  {/* 其他表头 */}
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">收件票数</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">重量</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">件数</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">运费</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">中转费</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">扫描费</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">基金费</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">电子单</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">收件分成</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">派件票数</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">派件重量</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">派件分成</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {data.map((item, index) => (
-                  <tr key={index} className="hover:bg-gray-50">
-                    {/* 日期列 - 中等层级 */}
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 sticky left-0 bg-white z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
-                      {new Date(item.date).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{item.pickupCount}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{item.weight}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{item.quantity}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{item.freight.toFixed(2)}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{item.transferFee.toFixed(2)}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{item.scanningFee.toFixed(2)}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{item.fundFee.toFixed(2)}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{item.electronicOrder.toFixed(2)}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-red-500">+{item.pickupShare.toFixed(2)}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{item.deliveryCount}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{item.deliveryWeight}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-red-500">+{item.deliveryShare.toFixed(2)}</td>
+        {/* 表格区域 - 添加条件渲染 */}
+        <div className={`transition-opacity duration-200 ${isDatePickerOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+          <div className="bg-white rounded-lg shadow relative">
+            {/* 添加一个外层容器，设置最大高度和滚动 */}
+            <div className="max-h-[calc(100vh-120px)] overflow-auto">
+              <table className="min-w-full divide-y divide-gray-200 relative">
+                <thead className="bg-gray-50 sticky top-0 z-30">
+                  <tr>
+                    {/* 日期表头 - 最高层级 */}
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase sticky left-0 bg-gray-50 z-40 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                      日期
+                    </th>
+                    {/* 其他表头 */}
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">收件票数</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">重量</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">件数</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">运费</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">中转费</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">扫描费</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">基金费</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">电子单</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">收件分成</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">派件票数</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">派件重量</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">派件分成</th>
                   </tr>
-                ))}
-                {/* 合计行 */}
-                <tr className="bg-gray-50 font-medium">
-                  {/* 合计列 - 中等层级 */}
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 sticky left-0 bg-gray-50 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
-                    合计
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                    {data.reduce((sum, item) => sum + item.pickupCount, 0)}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                    {data.reduce((sum, item) => sum + item.weight, 0).toFixed(2)}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                    {data.reduce((sum, item) => sum + item.quantity, 0)}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                    {data.reduce((sum, item) => sum + item.freight, 0).toFixed(2)}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                    {data.reduce((sum, item) => sum + item.transferFee, 0).toFixed(2)}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                    {data.reduce((sum, item) => sum + item.scanningFee, 0).toFixed(2)}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                    {data.reduce((sum, item) => sum + item.fundFee, 0).toFixed(2)}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                    {data.reduce((sum, item) => sum + item.electronicOrder, 0).toFixed(2)}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-red-500">
-                    +{data.reduce((sum, item) => sum + item.pickupShare, 0).toFixed(2)}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                    {data.reduce((sum, item) => sum + item.deliveryCount, 0)}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                    {data.reduce((sum, item) => sum + item.deliveryWeight, 0).toFixed(2)}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-red-500">
-                    +{data.reduce((sum, item) => sum + item.deliveryShare, 0).toFixed(2)}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {data.map((item, index) => (
+                    <tr key={index} className="hover:bg-gray-50">
+                      {/* 日期列 - 中等层级 */}
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 sticky left-0 bg-white z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                        {dayjs(item.date).format('MM月DD日')}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{item.pickupCount}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{item.weight.toFixed(2)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{item.quantity}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{item.freight.toFixed(2)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{item.transferFee.toFixed(2)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{item.scanningFee.toFixed(2)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{item.fundFee.toFixed(2)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{item.electronicOrder.toFixed(2)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-red-500">+{item.pickupShare.toFixed(2)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{item.deliveryCount}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{item.deliveryWeight.toFixed(2)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-red-500">+{item.deliveryShare.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                  {/* 合计行 */}
+                  <tr className="bg-gray-50 font-medium">
+                    {/* 合计列 - 中等层级 */}
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 sticky left-0 bg-gray-50 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                      合计
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                      {data.reduce((sum, item) => sum + item.pickupCount, 0)}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                      {data.reduce((sum, item) => sum + item.weight, 0).toFixed(2)}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                      {data.reduce((sum, item) => sum + item.quantity, 0)}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                      {data.reduce((sum, item) => sum + item.freight, 0).toFixed(2)}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                      {data.reduce((sum, item) => sum + item.transferFee, 0).toFixed(2)}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                      {data.reduce((sum, item) => sum + item.scanningFee, 0).toFixed(2)}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                      {data.reduce((sum, item) => sum + item.fundFee, 0).toFixed(2)}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                      {data.reduce((sum, item) => sum + item.electronicOrder, 0).toFixed(2)}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-red-500">
+                      +{data.reduce((sum, item) => sum + item.pickupShare, 0).toFixed(2)}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                      {data.reduce((sum, item) => sum + item.deliveryCount, 0)}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                      {data.reduce((sum, item) => sum + item.deliveryWeight, 0).toFixed(2)}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-red-500">
+                      +{data.reduce((sum, item) => sum + item.deliveryShare, 0).toFixed(2)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>

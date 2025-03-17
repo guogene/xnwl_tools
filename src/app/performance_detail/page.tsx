@@ -9,12 +9,33 @@ import "react-datepicker/dist/react-datepicker.css"
 import { registerLocale } from "react-datepicker"
 import { zhCN } from 'date-fns/locale/zh-CN'
 import { Watermark } from 'watermark-js-plus';
+import { Menu } from '@headlessui/react'
+import dayjs from 'dayjs'
+import 'dayjs/locale/zh-cn'
 
 registerLocale('zh-CN', zhCN)
 
+// 添加类型定义
+interface DailyPerformance {
+  name: string;
+  date: string;
+  pickupCount: number;
+  weight: number;
+  pickupShare: number;
+  deliveryCount: number;
+  deliveryWeight: number;
+  deliveryShare: number;
+}
+
+// 修改快捷日期范围的类型定义
+interface QuickRange {
+  label: string;
+  getValue: () => [Date, Date]; // 明确指定返回类型为元组
+}
+
 function PerformanceDetailContent() {
-  const [data, setData] = useState<PerformanceData[]>([])
-  const [rangeData, setRangeData] = useState<PerformanceData[]>([])
+  const [data, setData] = useState<DailyPerformance[]>([])
+  const [rangeData, setRangeData] = useState<DailyPerformance[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -48,13 +69,15 @@ function PerformanceDetailContent() {
   const urlStartDate = searchParams.get('startDate')
   const urlEndDate = searchParams.get('endDate')
   
-  // 初始化日期范围状态，优先使用 URL 中的日期
-  const [dateRange, setDateRange] = useState<[Date | null, Date | null]>([
-    urlStartDate ? new Date(urlStartDate) : new Date(),
-    urlEndDate ? new Date(urlEndDate) : new Date()
-  ])
+  // 修改初始化日期范围状态，默认为近一天
+  const [dateRange, setDateRange] = useState<[Date | null, Date | null]>(() => {
+    if (urlStartDate && urlEndDate) {
+      return [new Date(urlStartDate), new Date(urlEndDate)]
+    }
+    // 默认显示近一天
+    return [dayjs().subtract(1, 'day').toDate(), dayjs().toDate()]
+  })
   const [startDate, endDate] = dateRange
-  const dateRanges = ['本周(2/17-2/21)', '上周(2/10-2/14)', '本月(2/1-2/29)']
 
   // 加载最近三天的数据
   useEffect(() => {
@@ -73,7 +96,18 @@ function PerformanceDetailContent() {
         threeDaysAgo.setDate(today.getDate() - 2)
         
         const performanceData = await getEmployeePerformance(name, threeDaysAgo.toISOString().split('T')[0])
-        setData(performanceData)
+        // 转换数据格式
+        const formattedData = performanceData.map(record => ({
+          name: record.name || '',
+          date: record.date || '',
+          pickupCount: record.pickupCount || 0,
+          weight: record.weight || 0,
+          pickupShare: record.pickupShare || 0,
+          deliveryCount: record.deliveryCount || 0,
+          deliveryWeight: record.deliveryWeight || 0,
+          deliveryShare: record.deliveryShare || 0
+        }))
+        setData(formattedData)
       }
       setIsLoading(false)
     }
@@ -84,16 +118,50 @@ function PerformanceDetailContent() {
   useEffect(() => {
     async function loadRangeData() {
       if (name && startDate && endDate) {
+        // 创建startDate的副本并增加一天
+        const adjustedStartDate = new Date(startDate)
+        adjustedStartDate.setDate(adjustedStartDate.getDate() + 1)
+
         const rangeData = await getEmployeePerformanceByDateRange(
           name,
-          startDate.toISOString().split('T')[0],
+          adjustedStartDate.toISOString().split('T')[0],
           endDate.toISOString().split('T')[0]
         )
-        setRangeData(rangeData)
+        // 将API返回的数据转换为DailyPerformance格式
+        const formattedData = rangeData.map(record => ({
+          name: record.name || '',
+          date: record.date || '',
+          pickupCount: record.pickupCount || 0,
+          weight: record.weight || 0,
+          pickupShare: record.pickupShare || 0,
+          deliveryCount: record.deliveryCount || 0,
+          deliveryWeight: record.deliveryWeight || 0,
+          deliveryShare: record.deliveryShare || 0
+        }))
+        setRangeData(formattedData)
       }
     }
     loadRangeData()
   }, [name, startDate, endDate])
+
+  // 计算总账单 - 修改计算逻辑
+  const totalAmount = rangeData.reduce((sum, item) => 
+    sum + (item.pickupShare || 0) + (item.deliveryShare || 0), 0
+  )
+
+  // 计算收件汇总数据
+  const pickupSummary = rangeData.reduce((sum, item) => ({
+    share: sum.share + (item.pickupShare || 0),
+    count: sum.count + (item.pickupCount || 0),
+    weight: sum.weight + (item.weight || 0)
+  }), { share: 0, count: 0, weight: 0 })
+
+  // 计算派件汇总数据
+  const deliverySummary = rangeData.reduce((sum, item) => ({
+    share: sum.share + (item.deliveryShare || 0),
+    count: sum.count + (item.deliveryCount || 0),
+    weight: sum.weight + (item.deliveryWeight || 0)
+  }), { share: 0, count: 0, weight: 0 })
 
   // 获取指定日期的数据
   const getDayData = (daysAgo: number) => {
@@ -107,11 +175,6 @@ function PerformanceDetailContent() {
       deliveryShare: dayData?.deliveryShare || 0
     }
   }
-
-  // 计算总账单
-  const totalAmount = rangeData.reduce((sum, item) => 
-    sum + item.pickupShare + item.deliveryShare, 0
-  )
 
   // 获取今天、昨天、前天的数据
   const today = getDayData(0)
@@ -147,6 +210,52 @@ function PerformanceDetailContent() {
     }
   }
 
+  // 修改快捷日期范围的定义
+  const quickRanges: QuickRange[] = [
+    { 
+      label: '近一天', 
+      getValue: () => [dayjs().subtract(1, 'day').toDate(), dayjs().toDate()] as [Date, Date]
+    },
+    { 
+      label: '近三天', 
+      getValue: () => [dayjs().subtract(2, 'day').toDate(), dayjs().toDate()] as [Date, Date]
+    },
+    { 
+      label: '近一周', 
+      getValue: () => [dayjs().subtract(6, 'day').toDate(), dayjs().toDate()] as [Date, Date]
+    },
+    { 
+      label: '本月', 
+      getValue: () => [dayjs().startOf('month').toDate(), dayjs().toDate()] as [Date, Date]
+    },
+    { 
+      label: '上月', 
+      getValue: () => [dayjs().subtract(1, 'month').startOf('month').toDate(), dayjs().subtract(1, 'month').endOf('month').toDate()] as [Date, Date]
+    },
+  ]
+
+  // 获取当前选中的日期范围标签
+  const getCurrentRangeLabel = () => {
+    if (!startDate || !endDate) return '快捷选择'
+    
+    const start = dayjs(startDate)
+    const end = dayjs(endDate)
+    
+    for (const range of quickRanges) {
+      const [rangeStart, rangeEnd] = range.getValue()
+      if (start.isSame(dayjs(rangeStart), 'day') && end.isSame(dayjs(rangeEnd), 'day')) {
+        return range.label
+      }
+    }
+    return '自定义'
+  }
+
+  // 修改handleQuickRangeSelect的类型
+  const handleQuickRangeSelect = (range: QuickRange) => {
+    const [start, end] = range.getValue()
+    handleDateRangeChange([start, end])
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -178,9 +287,49 @@ function PerformanceDetailContent() {
 
       {/* 总账单 */}
       <div className="bg-white px-4 py-6 mb-4 bg-cyan-50 rounded-md">
-        <div className="flex justify-between items-center mb-2">
-          <div className="text-2xl font-bold">总账单</div>
-          <div className="relative z-10">
+      <div>
+      <div className="flex items-center justify-between mb-4">
+            <Menu as="div" className="relative">
+              <Menu.Button className="min-w-[100px] px-4 py-2 text-sm bg-white rounded-lg border border-gray-300 hover:bg-gray-50 flex items-center justify-between">
+                <span>{getCurrentRangeLabel()}</span>
+                <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </Menu.Button>
+              <Menu.Items className="absolute left-0 mt-2 w-40 bg-white rounded-md shadow-lg border border-gray-200 z-50">
+                <div className="py-1">
+                  {quickRanges.map((range) => {
+                    const [rangeStart, rangeEnd] = range.getValue()
+                    const isSelected = startDate && endDate && 
+                      dayjs(startDate).isSame(dayjs(rangeStart), 'day') && 
+                      dayjs(endDate).isSame(dayjs(rangeEnd), 'day')
+                    
+                    return (
+                      <Menu.Item key={range.label}>
+                        {({ active }) => (
+                          <button
+                            className={`${
+                              active ? 'bg-gray-100' : ''
+                            } w-full text-left px-4 py-2 text-sm ${
+                              isSelected ? 'text-blue-600 font-medium' : 'text-gray-700'
+                            } flex items-center justify-between`}
+                            onClick={() => handleQuickRangeSelect(range)}
+                          >
+                            <span>{range.label}</span>
+                            {isSelected && (
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                          </button>
+                        )}
+                      </Menu.Item>
+                    )
+                  })}
+                </div>
+              </Menu.Items>
+            </Menu>
+            
             <DatePicker
               selectsRange={true}
               startDate={startDate}
@@ -193,49 +342,52 @@ function PerformanceDetailContent() {
               locale="zh-CN"
               maxDate={new Date()}
             />
-          </div>
+          </div></div>
+        <div className="flex justify-between items-center mb-2">
+          <div className="text-2xl font-bold">总账单</div>
+          
         </div>
         <div className="text-3xl font-bold">{totalAmount.toFixed(2)} 元</div>
       </div>
 
       {/* 我的账单 */}
       <div className="bg-white px-4 py-4 mb-4">        
-        {/* 收件分成 */}
+        {/* 收件汇总 */}
         <div className="mb-6 bg-gray-100 p-4 rounded-md bg-violet-50">
-          <div className="text-gray-900 font-xl mb-3">收件分成</div>
+          <div className="text-gray-900 font-xl mb-3">收件汇总</div>
           <hr className='border-gray-300 mb-3' />
           <div className="space-y-3">
             <div className="flex justify-between items-center">
-              <div className="text-2xl font-bold">今天</div>
-              <div className="text-2xl font-bold text-red-500">+{today.pickupShare.toFixed(2)} 元</div>
+              <div className="text-xl">分成</div>
+              <div className="text-xl font-bold text-red-500">+{pickupSummary.share.toFixed(2)} 元</div>
             </div>
             <div className="flex justify-between items-center">
-              <div className="text-gray-500 text-xl">昨天</div>
-              <div className="text-xl text-red-500">+{yesterday.pickupShare.toFixed(2)} 元</div>
+              <div className="text-gray-600 text-lg">票数</div>
+              <div className="text-lg text-gray-900">{pickupSummary.count} 票</div>
             </div>
             <div className="flex justify-between items-center">
-              <div className="text-gray-400 text-lg">前天</div>
-              <div className="text-red-400 text-lg">+{dayBeforeYesterday.pickupShare.toFixed(2)} 元</div>
+              <div className="text-gray-600 text-lg">重量</div>
+              <div className="text-lg text-gray-900">{pickupSummary.weight.toFixed(2)} kg</div>
             </div>
           </div>
         </div>
 
-        {/* 派件分成 */}
+        {/* 派件汇总 */}
         <div className="mb-6 bg-gray-100 p-4 rounded-md bg-pink-50">
-          <div className="text-gray-900 font-xl mb-3">派件分成</div>
+          <div className="text-gray-900 font-xl mb-3">派件汇总</div>
           <hr className='border-gray-300 mb-3' />
           <div className="space-y-3">
             <div className="flex justify-between items-center">
-              <div className="text-2xl font-bold">今天</div>
-              <div className="text-2xl font-bold text-red-500">+{today.deliveryShare.toFixed(2)} 元</div>
+              <div className="text-xl">分成</div>
+              <div className="text-xl font-bold text-red-500">+{deliverySummary.share.toFixed(2)} 元</div>
             </div>
             <div className="flex justify-between items-center">
-              <div className="text-gray-500 text-xl">昨天</div>
-              <div className="text-red-500 text-xl">+{yesterday.deliveryShare.toFixed(2)} 元</div>
+              <div className="text-gray-600 text-lg">票数</div>
+              <div className="text-lg text-gray-900">{deliverySummary.count} 票</div>
             </div>
             <div className="flex justify-between items-center">
-              <div className="text-gray-400 text-lg">前天</div>
-              <div className="text-red-400 text-lg">+{dayBeforeYesterday.deliveryShare.toFixed(2)} 元</div>
+              <div className="text-gray-600 text-lg">重量</div>
+              <div className="text-lg text-gray-900">{deliverySummary.weight.toFixed(2)} kg</div>
             </div>
           </div>
         </div>
@@ -254,10 +406,6 @@ function PerformanceDetailContent() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
             </svg>
           </div>
-        </div>
-        <hr className='border-gray-300 mb-3'/>
-        <div className="text-gray-400 text-lg">
-          <span>日期: {startDate?.toLocaleDateString()} - {endDate?.toLocaleDateString()}</span>
         </div>
       </div>
     </div>
