@@ -16,6 +16,7 @@ import {
   batchUpsertPerformance,
   deleteEmployeeData 
 } from './actions'
+import dayjs from 'dayjs'
 
 const columnHelper = createColumnHelper<PerformanceData>()
 
@@ -26,7 +27,7 @@ const columns = [
       const date = info.getValue()
       if (!date) return ''
       try {
-        return new Date(date).toISOString().split('T')[0]
+        return dayjs(date).format('YYYY-MM-DD')
       } catch (e) {
         return date
       }
@@ -137,12 +138,9 @@ export default function Performance() {
   })
 
   const excelDateToJSDate = (excelDate: number) => {
-    // Excel 日期从 1900-01-01 开始，且错误地将1900年视为闰年
-    // 调整公式：Unix时间戳 = (Excel天数 - 25569) * 86400 * 1000
-    const jsTimestamp = (excelDate - 25569) * 86400 * 1000;
-    const jsDate = new Date(jsTimestamp);
-    // 格式化为 YYYY-MM-DD
-    return jsDate.toISOString().split('T')[0];
+    const jsTimestamp = (excelDate - 25569) * 86400 * 1000
+    const jsDate = new Date(jsTimestamp)
+    return dayjs(jsDate).format('YYYY-MM-DD')
   }
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -393,7 +391,9 @@ export default function Performance() {
               <div className="grid grid-cols-3 gap-4">
                 {/* 日期 */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">日期： {new Date(editingData.date).toISOString().split('T')[0]}</label>
+                  <label className="block text-sm font-medium text-gray-700">
+                    日期：{dayjs(editingData.date).format('YYYY-MM-DD')}
+                  </label>
                 </div>
 
                 {/* 收件票数 */}

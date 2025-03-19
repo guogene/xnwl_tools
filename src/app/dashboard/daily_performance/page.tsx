@@ -16,6 +16,7 @@ import {
   batchUpsertPerformance,
   deleteEmployeeData 
 } from './actions'
+import dayjs from 'dayjs'
 
 const columnHelper = createColumnHelper<DailyPerformanceData>()
 
@@ -26,7 +27,7 @@ const columns = [
       const date = info.getValue()
       if (!date) return ''
       try {
-        return new Date(date).toISOString().split('T')[0]
+        return dayjs(date).format('YYYY-MM-DD')
       } catch (e) {
         return date
       }
@@ -115,7 +116,7 @@ export default function DailyPerformance() {
   const excelDateToJSDate = (excelDate: number) => {
     const jsTimestamp = (excelDate - 25569) * 86400 * 1000
     const jsDate = new Date(jsTimestamp)
-    return jsDate.toISOString().split('T')[0]
+    return dayjs(jsDate).format('YYYY-MM-DD')
   }
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -359,7 +360,7 @@ export default function DailyPerformance() {
                 {/* 日期 */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700">
-                    日期：{new Date(editingData.date).toISOString().split('T')[0]}
+                    日期：{dayjs(editingData.date).format('YYYY-MM-DD')}
                   </label>
                 </div>
 

@@ -119,12 +119,9 @@ function PerformanceDetailContent() {
     async function loadRangeData() {
       if (name && startDate && endDate) {
         // 创建startDate的副本并增加一天
-        const adjustedStartDate = new Date(startDate)
-        adjustedStartDate.setDate(adjustedStartDate.getDate() + 1)
-
         const rangeData = await getEmployeePerformanceByDateRange(
           name,
-          adjustedStartDate.toISOString().split('T')[0],
+          startDate.toISOString().split('T')[0],
           endDate.toISOString().split('T')[0]
         )
         // 将API返回的数据转换为DailyPerformance格式
@@ -165,11 +162,10 @@ function PerformanceDetailContent() {
 
   // 获取指定日期的数据
   const getDayData = (daysAgo: number) => {
-    const targetDate = new Date()
-    targetDate.setDate(targetDate.getDate() - daysAgo)
-    const targetDateStr = targetDate.toISOString().split('T')[0]
+    const targetDate = dayjs().subtract(daysAgo, 'day')
+    const targetDateStr = targetDate.format('YYYY-MM-DD')
     
-    const dayData = data.find(item => item.date.split('T')[0] === targetDateStr)
+    const dayData = data.find(item => dayjs(item.date).format('YYYY-MM-DD') === targetDateStr)
     return {
       pickupShare: dayData?.pickupShare || 0,
       deliveryShare: dayData?.deliveryShare || 0
@@ -188,12 +184,12 @@ function PerformanceDetailContent() {
     // 更新 URL 参数
     const newSearchParams = new URLSearchParams(searchParams.toString())
     if (update[0]) {
-      newSearchParams.set('startDate', update[0].toISOString().split('T')[0])
+      newSearchParams.set('startDate', dayjs(update[0]).format('YYYY-MM-DD'))
     } else {
       newSearchParams.delete('startDate')
     }
     if (update[1]) {
-      newSearchParams.set('endDate', update[1].toISOString().split('T')[0])
+      newSearchParams.set('endDate', dayjs(update[1]).format('YYYY-MM-DD'))
     } else {
       newSearchParams.delete('endDate')
     }
