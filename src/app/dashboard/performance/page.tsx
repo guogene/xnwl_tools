@@ -151,81 +151,110 @@ export default function Performance() {
 
       const reader = new FileReader()
       reader.onload = async (e) => {
-        const workbook = XLSX.read(e.target?.result, { type: 'buffer' })
-        
-        const sheet = workbook.Sheets[workbook.SheetNames[0]]; 
-        const range = XLSX.utils.decode_range(sheet['!ref']);
-        
-        // 提取表头（第三行）
-        const headers = [];
-        for (let col = range.s.c; col <= range.e.c; col++) {
-            const cellAddress = XLSX.utils.encode_cell({ r: 1, c: col });
-            const cell = sheet[cellAddress];
-            if (headers.indexOf(cell ? cell.v : null) === -1) {
-              headers[col] = cell ? cell.v : null;
-            } else {
-              headers[col] = cell ? "派件"+cell.v : null;
-            }
-        }
-
-        // 提取数据行
-        const list = [];
-        for (let row = 2; row <= range.e.r; row++) {
-            const rowData = {};
-            let isEmpty = true;
-
-            for (let col = range.s.c; col <= range.e.c; col++) {
-                const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
-                const cell = sheet[cellAddress];
-                const value = cell ? cell.v : null;
-                rowData[headers[col]] = value;
-                if (value !== null) isEmpty = false;
-            }
-
-            if (!isEmpty) list.push(rowData);
-        }
-
-        // 构建 JSON（处理日期）
-        const nameCell = sheet['A1'];
-        const name = nameCell ? nameCell.v : null;
-        const performanceDataList: PerformanceDataList = {
-          name: name,
-          list: list.map(item => ({
-            date: item.日期 !== null ? excelDateToJSDate(item.日期) : null,
-            pickupCount: item.收件票数 !== null ? parseInt(item.收件票数) : null,
-            weight: item.重量 !== null ? parseFloat(item.重量) : null,
-            quantity: item.件数 !== null ? parseInt(item.件数) : null,
-            freight: item.运费 !== null ? parseFloat(item.运费) : null,
-            transferFee: item.中转费 !== null ? parseFloat(item.中转费) : null,
-            scanningFee: item.扫描费 !== null ? parseFloat(item.扫描费) : null,
-            fundFee: item.基金费 !== null ? parseFloat(item.基金费) : null,
-            electronicOrder: item.电子单 !== null ? parseFloat(item.电子单) : null,
-            pickupShare: item.收件分成 !== null ? parseFloat(item.收件分成) : null,
-            deliveryCount: item.派件票数 !== null ? parseInt(item.派件票数) : null,
-            deliveryWeight: item.派件重量 !== null ? parseFloat(item.派件重量) : null,
-            deliveryShare: item.派件分成 !== null ? parseFloat(item.派件分成) : null,
-          }))
-        }
-
-        // 保存到数据库
-        const result = await batchUpsertPerformance(performanceDataList.name, performanceDataList.list)
-        if (result.success) {
-          // 刷新数据
-          const updatedData = await getEmployeePerformance(performanceDataList.name)
-          setData(updatedData)
-          setSelectedEmployee(performanceDataList.name)
+        try {
+          const workbook = XLSX.read(e.target?.result, { type: 'buffer' })
           
-          // 刷新员工列表
-          const employeeList = await getEmployees()
-          setEmployees(employeeList)
-        } else {
-          alert(result.error)
+          // 遍历所有sheet
+          for (const sheetName of workbook.SheetNames) {
+            try {
+              const sheet = workbook.Sheets[sheetName]
+              const range = XLSX.utils.decode_range(sheet['!ref'] || '')
+              
+              // 提取表头（第三行）
+              const headers: string[] = []
+              for (let col = range.s.c; col <= range.e.c; col++) {
+                const cellAddress = XLSX.utils.encode_cell({ r: 1, c: col })
+                const cell = sheet[cellAddress]
+                if (headers.indexOf(cell?.v) === -1) {
+                  headers[col] = cell?.v || null
+                } else {
+                  headers[col] = cell ? "派件"+cell.v : null
+                }
+              }
+
+              // 提取数据行
+              const list = []
+              for (let row = 2; row <= range.e.r; row++) {
+                const rowData: Record<string, any> = {}
+                let isEmpty = true
+
+                for (let col = range.s.c; col <= range.e.c; col++) {
+                  const cellAddress = XLSX.utils.encode_cell({ r: row, c: col })
+                  const cell = sheet[cellAddress]
+                  const value = cell?.v ?? null
+                  if (headers[col]) {
+                    rowData[headers[col]] = value
+                    if (value !== null) isEmpty = false
+                  }
+                }
+
+                if (!isEmpty) list.push(rowData)
+              }
+
+              // 构建 JSON（处理日期）
+              const nameCell = sheet['A1']
+              const name = nameCell?.v
+              
+              if (!name) {
+                throw new Error('未找到员工姓名')
+              }
+
+              const performanceDataList: PerformanceDataList = {
+                name,
+                list: list.map(item => ({
+                  date: item['日期'] !== null ? excelDateToJSDate(item['日期']) : null,
+                  pickupCount: item['收件票数'] !== null ? parseInt(String(item['收件票数'])) : null,
+                  weight: item['重量'] !== null ? parseFloat(String(item['重量'])) : null,
+                  quantity: item['件数'] !== null ? parseInt(String(item['件数'])) : null,
+                  freight: item['运费'] !== null ? parseFloat(String(item['运费'])) : null,
+                  transferFee: item['中转费'] !== null ? parseFloat(String(item['中转费'])) : null,
+                  scanningFee: item['扫描费'] !== null ? parseFloat(String(item['扫描费'])) : null,
+                  fundFee: item['基金费'] !== null ? parseFloat(String(item['基金费'])) : null,
+                  electronicOrder: item['电子单'] !== null ? parseFloat(String(item['电子单'])) : null,
+                  pickupShare: item['收件分成'] !== null ? parseFloat(String(item['收件分成'])) : null,
+                  deliveryCount: item['派件票数'] !== null ? parseInt(String(item['派件票数'])) : null,
+                  deliveryWeight: item['派件重量'] !== null ? parseFloat(String(item['派件重量'])) : null,
+                  deliveryShare: item['派件分成'] !== null ? parseFloat(String(item['派件分成'])) : null,
+                }))
+              }
+
+              // 保存到数据库
+              const result = await batchUpsertPerformance(performanceDataList.name, performanceDataList.list)
+              if (!result.success) {
+                throw new Error(result.error)
+              }
+
+            } catch (error) {
+              throw new Error(`处理工作表"${sheetName}"时出错: ${error instanceof Error ? error.message : '未知错误'}`)
+            }
+          }
+
+          // 所有sheet处理完成后，刷新最后一个处理的员工数据
+          const nameCell = workbook.Sheets[workbook.SheetNames[workbook.SheetNames.length - 1]]['A1']
+          const lastProcessedName = nameCell?.v
+
+          if (lastProcessedName) {
+            // 刷新数据
+            const updatedData = await getEmployeePerformance(lastProcessedName)
+            setData(updatedData)
+            setSelectedEmployee(lastProcessedName)
+            
+            // 刷新员工列表
+            const employeeList = await getEmployees()
+            setEmployees(employeeList)
+          }
+
+          alert('所有工作表导入成功！')
+
+        } catch (error) {
+          console.error('Error processing Excel file:', error)
+          alert(error instanceof Error ? error.message : '导入过程中发生未知错误')
         }
       }
       reader.readAsArrayBuffer(file)
     } catch (error) {
       console.error('Error handling file upload:', error)
-      alert('导入失败')
+      alert('文件上传失败')
     } finally {
       setIsLoading(false)
     }

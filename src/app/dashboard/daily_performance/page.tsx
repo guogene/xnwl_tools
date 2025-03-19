@@ -128,71 +128,102 @@ export default function DailyPerformance() {
       const reader = new FileReader()
       reader.onload = async (e) => {
         const workbook = XLSX.read(e.target?.result, { type: 'buffer' })
-        const sheet = workbook.Sheets[workbook.SheetNames[0]]
         
-        // 获取员工姓名
-        const nameCell = sheet['A1']
-        const name = nameCell ? nameCell.v : null
+        // 遍历所有sheet
+        for (const sheetName of workbook.SheetNames) {
+          try {
+            const sheet = workbook.Sheets[sheetName]
+            
+            // 获取员工姓名
+            const nameCell = sheet['A1']
+            const name = nameCell ? nameCell.v : null
+            
+            if (!name) {
+              throw new Error('未找到员工姓名')
+            }
 
-        // 获取数据范围
-        const range = XLSX.utils.decode_range(sheet['!ref'])
-        
-        // 提取表头（第二行）
-        const headers = []
-        for (let col = range.s.c; col <= range.e.c; col++) {
-          const cellAddress = XLSX.utils.encode_cell({ r: 1, c: col })
-          const cell = sheet[cellAddress]
-          headers[col] = cell ? cell.v : null
-        }
+            // 获取数据范围
+            const ref = sheet['!ref']
+            if (!ref) {
+              throw new Error('sheet为空')
+            }
+            const range = XLSX.utils.decode_range(ref)
+            
+            // 提取表头（第二行）
+            const headers: (string | null)[] = []
+            for (let col = range.s.c; col <= range.e.c; col++) {
+              const cellAddress = XLSX.utils.encode_cell({ r: 1, c: col })
+              const cell = sheet[cellAddress]
+              headers[col] = cell ? cell.v : null
+            }
 
-        // 提取数据行（从第三行开始）
-        const list = []
-        for (let row = 2; row <= range.e.r; row++) {
-          const rowData = {}
-          let isEmpty = true
+            // 提取数据行（从第三行开始）
+            const list = []
+            for (let row = 2; row <= range.e.r; row++) {
+              const rowData: Record<string, any> = {}
+              let isEmpty = true
 
-          for (let col = range.s.c; col <= range.e.c; col++) {
-            const cellAddress = XLSX.utils.encode_cell({ r: row, c: col })
-            const cell = sheet[cellAddress]
-            const value = cell ? cell.v : null
-            rowData["col_"+col] = value
-            if (value !== null) isEmpty = false
+              for (let col = range.s.c; col <= range.e.c; col++) {
+                const cellAddress = XLSX.utils.encode_cell({ r: row, c: col })
+                const cell = sheet[cellAddress]
+                const value = cell ? cell.v : null
+                rowData[`col_${col}`] = value
+                if (value !== null) isEmpty = false
+              }
+
+              if (!isEmpty) list.push(rowData)
+            }
+
+            // 构建数据列表
+            const performanceDataList: DailyPerformanceDataList = {
+              name: name,
+              list: list.map(item => ({
+                date: item.col_0 ? excelDateToJSDate(item.col_0) : null,
+                pickupCount: item.col_1 ? parseInt(String(item.col_1)) : 0,
+                weight: item.col_2 ? parseFloat(String(item.col_2)) : 0,
+                pickupShare: item.col_3 ? parseFloat(String(item.col_3)) : 0,
+                deliveryCount: item.col_4 ? parseInt(String(item.col_4)) : 0,
+                deliveryWeight: item.col_5 ? parseFloat(String(item.col_5)) : 0,
+                deliveryShare: item.col_6 ? parseFloat(String(item.col_6)) : 0,
+              }))
+            }
+
+            // 保存到数据库
+            const result = await batchUpsertPerformance(performanceDataList.name, performanceDataList.list)
+            if (!result.success) {
+              throw new Error(result.error)
+            }
+
+          } catch (error) {
+            console.error(`处理工作表 "${sheetName}" 时出错:`, error)
+            alert(`处理工作表 "${sheetName}" 时出错: ${error instanceof Error ? error.message : '未知错误'}`)
+            return // 遇到错误时停止处理后续sheet
           }
-
-          if (!isEmpty) list.push(rowData)
         }
 
-        // 构建数据列表
-        const performanceDataList: DailyPerformanceDataList = {
-          name: name,
-          list: list.map(item => ({
-            date: item.col_0 ? excelDateToJSDate(item.col_0) : null,
-            pickupCount: item.col_1 ? parseInt(item.col_1) : 0,
-            weight: item.col_2 ? parseFloat(item.col_2) : 0,
-            pickupShare: item.col_3 ? parseFloat(item.col_3) : 0,
-            deliveryCount: item.col_4 ? parseInt(item.col_4) : 0,
-            deliveryWeight: item.col_5 ? parseFloat(item.col_5) : 0,
-            deliveryShare: item.col_6 ? parseFloat(item.col_6) : 0,
-          }))
-        }
-
-        // 保存到数据库
-        const result = await batchUpsertPerformance(performanceDataList.name, performanceDataList.list)
-        if (result.success) {
-          const updatedData = await getEmployeePerformance(performanceDataList.name)
-          setData(updatedData)
-          setSelectedEmployee(performanceDataList.name)
+        // 所有sheet处理完成后，更新UI
+        if (workbook.SheetNames.length > 0) {
+          const firstSheet = workbook.Sheets[workbook.SheetNames[0]]
+          const nameCell = firstSheet['A1']
+          const name = nameCell ? nameCell.v : null
           
-          const employeeList = await getEmployees()
-          setEmployees(employeeList)
-        } else {
-          alert(result.error)
+          if (name) {
+            const updatedData = await getEmployeePerformance(name)
+            setData(updatedData as DailyPerformanceData[])
+            setSelectedEmployee(name)
+            
+            const employeeList = await getEmployees()
+            setEmployees(employeeList)
+          }
         }
+
+        alert('所有工作表处理完成')
+
       }
       reader.readAsArrayBuffer(file)
     } catch (error) {
       console.error('Error handling file upload:', error)
-      alert('导入失败')
+      alert('导入失败: ' + (error instanceof Error ? error.message : '未知错误'))
     } finally {
       setIsLoading(false)
     }
