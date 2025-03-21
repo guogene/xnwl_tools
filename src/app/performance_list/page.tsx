@@ -58,8 +58,8 @@ function PerformanceListContent() {
   useEffect(() => {
     async function loadData() {
       if (name) {
-        const startDate = dayjs(selectedMonth).startOf('month').format('YYYY-MM-DD')
-        const endDate = dayjs(selectedMonth).endOf('month').format('YYYY-MM-DD')
+        const startDate = dayjs(selectedMonth).startOf('month').format('YYYY-MM-DD HH:mm:ss')
+        const endDate = dayjs(selectedMonth).endOf('month').format('YYYY-MM-DD HH:mm:ss')
         
         const performanceData = await getPerformanceList(name, startDate, endDate)
         setData(performanceData)

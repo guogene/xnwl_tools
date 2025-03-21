@@ -88,14 +88,16 @@ function PerformanceDetailContent() {
           width: 120,
           height: 100,
           globalAlpha: 0.1,
-      })
+        })
         watermark.create();
 
-        const today = new Date()
-        const threeDaysAgo = new Date(today)
-        threeDaysAgo.setDate(today.getDate() - 2)
+        const today = dayjs()
+        const threeDaysAgo = today.subtract(2, 'day')
         
-        const performanceData = await getEmployeePerformance(name, threeDaysAgo.toISOString().split('T')[0])
+        const performanceData = await getEmployeePerformance(
+          name, 
+          threeDaysAgo.format('YYYY-MM-DD')
+        )
         // 转换数据格式
         const formattedData = performanceData.map(record => ({
           name: record.name || '',
@@ -118,11 +120,10 @@ function PerformanceDetailContent() {
   useEffect(() => {
     async function loadRangeData() {
       if (name && startDate && endDate) {
-        // 创建startDate的副本并增加一天
         const rangeData = await getEmployeePerformanceByDateRange(
           name,
-          startDate.toISOString().split('T')[0],
-          endDate.toISOString().split('T')[0]
+          dayjs(startDate).format('YYYY-MM-DD HH:mm:ss'),
+          dayjs(endDate).format('YYYY-MM-DD HH:mm:ss')
         )
         // 将API返回的数据转换为DailyPerformance格式
         const formattedData = rangeData.map(record => ({
@@ -184,12 +185,12 @@ function PerformanceDetailContent() {
     // 更新 URL 参数
     const newSearchParams = new URLSearchParams(searchParams.toString())
     if (update[0]) {
-      newSearchParams.set('startDate', dayjs(update[0]).format('YYYY-MM-DD'))
+      newSearchParams.set('startDate', dayjs(update[0]).format('YYYY-MM-DD HH:mm:ss'))
     } else {
       newSearchParams.delete('startDate')
     }
     if (update[1]) {
-      newSearchParams.set('endDate', dayjs(update[1]).format('YYYY-MM-DD'))
+      newSearchParams.set('endDate', dayjs(update[1]).format('YYYY-MM-DD HH:mm:ss'))
     } else {
       newSearchParams.delete('endDate')
     }
