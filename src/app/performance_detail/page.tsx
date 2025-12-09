@@ -347,6 +347,21 @@ function PerformanceDetailContent() {
         <div className="text-3xl font-bold">{totalAmount.toFixed(2)} 元</div>
       </div>
 
+      <div className="bg-white px-4 py-4 mb-4">
+        {/* 账单明细 */}
+        <div 
+          className="flex justify-between items-center py-3 border-b cursor-pointer"
+          onClick={handleViewDetail}
+        >
+          <div className="text-lg font-medium">月账单明细</div>
+          <div className="text-gray-400 flex items-center">
+            <svg className="w-5 h-5 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+            </svg>
+          </div>
+        </div>
+      </div>
+
       {/* 我的账单 */}
       <div className="bg-white px-4 py-4 mb-4">        
         {/* 收件汇总 */}
@@ -389,21 +404,6 @@ function PerformanceDetailContent() {
           </div>
         </div>
 
-      </div>
-
-      <div className="bg-white px-4 py-4 mb-4">
-        {/* 账单明细 */}
-        <div 
-          className="flex justify-between items-center py-3 border-b cursor-pointer"
-          onClick={handleViewDetail}
-        >
-          <div className="text-lg font-medium">账单明细</div>
-          <div className="text-gray-400 flex items-center">
-            <svg className="w-5 h-5 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-            </svg>
-          </div>
-        </div>
       </div>
     </div>
     // </Watermark>

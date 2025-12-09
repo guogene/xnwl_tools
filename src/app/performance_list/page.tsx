@@ -35,6 +35,8 @@ function PerformanceListContent() {
   const startDate = searchParams.get('startDate')
   const endDate = searchParams.get('endDate')
 
+  const [totalAmount, setTotalAmount] = useState<number>(0)
+
   const [name, setName] = useState<string>('')
   
   // 默认选择上个月
@@ -63,6 +65,9 @@ function PerformanceListContent() {
         
         const performanceData = await getPerformanceList(name, startDate, endDate)
         setData(performanceData)
+        // 计算总金额
+        const total = performanceData.reduce((acc, cur) => acc + cur.pickupShare + cur.deliveryShare, 0)
+        setTotalAmount(total)
       }
       setIsLoading(false)
     }
@@ -109,7 +114,7 @@ function PerformanceListContent() {
       {/* 表格容器 */}
       <div className="p-4">
         {/* 日期范围显示 */}
-        <div className="mb-4 text-gray-600 font-bold text-2xl relative">
+        <div className="mb-4 text-gray-600 font-bold text-2xl relative flex justify-between items-center">
           {/* 月份选择器 */}
           <DatePicker
             selected={selectedMonth}
@@ -124,6 +129,9 @@ function PerformanceListContent() {
             onCalendarOpen={() => setIsDatePickerOpen(true)}
             onCalendarClose={() => setIsDatePickerOpen(false)}
           />
+          <div className="text-right text-lg font-bold text-gray-600">
+            总金额: {totalAmount.toFixed(2)} 元
+          </div>
         </div>
 
         {/* 表格区域 - 添加条件渲染 */}
