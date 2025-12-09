@@ -15,7 +15,7 @@
     "@types/react-datepicker": "^7.0.0",
     "@types/xlsx": "^0.0.36",
     "dayjs": "^1.11.13",
-    "next": "latest",
+    "next": "^15.1.9",
     "pocketbase": "^0.25.1",
     "react": "latest",
     "react-datepicker": "^8.1.0",
