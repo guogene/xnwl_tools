@@ -76,14 +76,38 @@ export async function deleteEmployeeData(name: string) {
     const records = await pb.collection('performance').getFullList({
       filter: `name = "${name}"`,
     })
-    
+
     for (const record of records) {
       await pb.collection('performance').delete(record.id)
     }
-    
+
     return { success: true }
   } catch (error) {
     console.error('Error deleting employee data:', error)
+    return { error: '删除失败' }
+  }
+}
+
+// 按年月删除员工数据
+export async function deleteEmployeeDataByMonth(name: string, year: number, month: number) {
+  try {
+    // 构建日期范围：从当月1号到下月1号（不包含）
+    const startDate = `${year}-${String(month).padStart(2, '0')}-01`
+    const nextMonth = month === 12 ? 1 : month + 1
+    const nextYear = month === 12 ? year + 1 : year
+    const endDate = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`
+
+    const records = await pb.collection('performance').getFullList({
+      filter: `name = "${name}" && date >= "${startDate}" && date < "${endDate}"`,
+    })
+
+    for (const record of records) {
+      await pb.collection('performance').delete(record.id)
+    }
+
+    return { success: true, deletedCount: records.length }
+  } catch (error) {
+    console.error('Error deleting employee data by month:', error)
     return { error: '删除失败' }
   }
 } 

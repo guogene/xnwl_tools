@@ -3,17 +3,11 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { PerformanceData } from '@/types/performance'
-import { getEmployeePerformance, getEmployeePerformanceByDateRange } from './actions'
-import DatePicker from 'react-datepicker'
-import "react-datepicker/dist/react-datepicker.css"
-import { registerLocale } from "react-datepicker"
-import { zhCN } from 'date-fns/locale/zh-CN'
+import { getEmployeePerformance, getEmployeePerformanceByMonth } from './actions'
 import { Watermark } from 'watermark-js-plus';
 import { Menu } from '@headlessui/react'
 import dayjs from 'dayjs'
 import 'dayjs/locale/zh-cn'
-
-registerLocale('zh-CN', zhCN)
 
 // 添加类型定义
 interface DailyPerformance {
@@ -27,12 +21,6 @@ interface DailyPerformance {
   deliveryShare: number;
 }
 
-// 修改快捷日期范围的类型定义
-interface QuickRange {
-  label: string;
-  getValue: () => [Date, Date]; // 明确指定返回类型为元组
-}
-
 function PerformanceDetailContent() {
   const [data, setData] = useState<DailyPerformance[]>([])
   const [rangeData, setRangeData] = useState<DailyPerformance[]>([])
@@ -42,10 +30,15 @@ function PerformanceDetailContent() {
 
   const [name, setName] = useState<string>('')
 
+  // 年月选择状态，默认为当前年月
+  const [selectedYear, setSelectedYear] = useState(dayjs().year())
+  const [selectedMonth, setSelectedMonth] = useState(dayjs().month() + 1)
+  const [showYearMonthPicker, setShowYearMonthPicker] = useState(false)
+
   useEffect(() => {
     // 首先尝试从sessionStorage获取
     const storedName = sessionStorage.getItem('name')
-    
+
     if (storedName) {
       setName(storedName)
       return
@@ -53,7 +46,7 @@ function PerformanceDetailContent() {
 
     // 如果sessionStorage中没有，则从URL参数获取
     const tempUsername = searchParams.get('temp_username')
-    
+
     if (tempUsername) {
       // 存入sessionStorage
       sessionStorage.setItem('name', tempUsername)
@@ -64,20 +57,17 @@ function PerformanceDetailContent() {
       router.replace(`/performance_detail${newSearchParams.toString() ? `?${newSearchParams.toString()}` : ''}`)
     }
   }, [searchParams, router])
-  
-  // 从 URL 参数中获取日期范围
-  const urlStartDate = searchParams.get('startDate')
-  const urlEndDate = searchParams.get('endDate')
-  
-  // 修改初始化日期范围状态，默认为近一天
-  const [dateRange, setDateRange] = useState<[Date | null, Date | null]>(() => {
-    if (urlStartDate && urlEndDate) {
-      return [new Date(urlStartDate), new Date(urlEndDate)]
+
+  // 从 URL 参数中获取年月
+  useEffect(() => {
+    const urlYear = searchParams.get('year')
+    const urlMonth = searchParams.get('month')
+
+    if (urlYear && urlMonth) {
+      setSelectedYear(parseInt(urlYear))
+      setSelectedMonth(parseInt(urlMonth))
     }
-    // 默认显示近一天
-    return [dayjs().subtract(1, 'day').toDate(), dayjs().toDate()]
-  })
-  const [startDate, endDate] = dateRange
+  }, [searchParams])
 
   // 加载最近三天的数据
   useEffect(() => {
@@ -93,9 +83,9 @@ function PerformanceDetailContent() {
 
         const today = dayjs()
         const threeDaysAgo = today.subtract(2, 'day')
-        
+
         const performanceData = await getEmployeePerformance(
-          name, 
+          name,
           threeDaysAgo.format('YYYY-MM-DD')
         )
         // 转换数据格式
@@ -116,15 +106,12 @@ function PerformanceDetailContent() {
     loadData()
   }, [name])
 
-  // 加载日期范围内的数据
+  // 加载选中年月的数据
   useEffect(() => {
     async function loadRangeData() {
-      if (name && startDate && endDate) {
-        const rangeData = await getEmployeePerformanceByDateRange(
-          name,
-          dayjs(startDate).format('YYYY-MM-DD HH:mm:ss'),
-          dayjs(endDate).format('YYYY-MM-DD HH:mm:ss')
-        )
+      if (name && selectedYear && selectedMonth) {
+        const rangeData = await getEmployeePerformanceByMonth(name, selectedYear, selectedMonth)
+        console.log(rangeData)
         // 将API返回的数据转换为DailyPerformance格式
         const formattedData = rangeData.map(record => ({
           name: record.name || '',
@@ -140,7 +127,7 @@ function PerformanceDetailContent() {
       }
     }
     loadRangeData()
-  }, [name, startDate, endDate])
+  }, [name, selectedYear, selectedMonth])
 
   // 计算总账单 - 修改计算逻辑
   const totalAmount = rangeData.reduce((sum, item) => 
@@ -178,80 +165,39 @@ function PerformanceDetailContent() {
   const yesterday = getDayData(1)
   const dayBeforeYesterday = getDayData(2)
 
-  // 修改日期选择的处理函数
-  const handleDateRangeChange = (update: [Date | null, Date | null]) => {
-    setDateRange(update)
-    
+  // 年月选择处理函数
+  const handleYearMonthChange = (year: number, month: number) => {
+    setSelectedYear(year)
+    setSelectedMonth(month)
+    setShowYearMonthPicker(false)
+
     // 更新 URL 参数
     const newSearchParams = new URLSearchParams(searchParams.toString())
-    if (update[0]) {
-      newSearchParams.set('startDate', dayjs(update[0]).format('YYYY-MM-DD HH:mm:ss'))
-    } else {
-      newSearchParams.delete('startDate')
-    }
-    if (update[1]) {
-      newSearchParams.set('endDate', dayjs(update[1]).format('YYYY-MM-DD HH:mm:ss'))
-    } else {
-      newSearchParams.delete('endDate')
-    }
-    
+    newSearchParams.set('year', year.toString())
+    newSearchParams.set('month', month.toString())
+
     // 使用 replace 而不是 push 来避免创建新的历史记录
     router.replace(`/performance_detail?${newSearchParams.toString()}`)
   }
 
   // 修改查看明细的处理函数
   const handleViewDetail = () => {
-    if (startDate && endDate) {
-      // 直接使用当前 URL 的所有参数
-      router.push(`/performance_list?${searchParams.toString()}`)
-    }
+    // 使用当前选中的年月构建日期范围
+    const startDate = dayjs(`${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`)
+    const endDate = startDate.endOf('month')
+
+    const newSearchParams = new URLSearchParams(searchParams.toString())
+    newSearchParams.set('startDate', startDate.format('YYYY-MM-DD HH:mm:ss'))
+    newSearchParams.set('endDate', endDate.format('YYYY-MM-DD HH:mm:ss'))
+
+    router.push(`/performance_list?${newSearchParams.toString()}`)
   }
 
-  // 修改快捷日期范围的定义
-  const quickRanges: QuickRange[] = [
-    { 
-      label: '近一天', 
-      getValue: () => [dayjs().subtract(1, 'day').toDate(), dayjs().toDate()] as [Date, Date]
-    },
-    { 
-      label: '近三天', 
-      getValue: () => [dayjs().subtract(2, 'day').toDate(), dayjs().toDate()] as [Date, Date]
-    },
-    { 
-      label: '近一周', 
-      getValue: () => [dayjs().subtract(6, 'day').toDate(), dayjs().toDate()] as [Date, Date]
-    },
-    { 
-      label: '本月', 
-      getValue: () => [dayjs().startOf('month').toDate(), dayjs().toDate()] as [Date, Date]
-    },
-    { 
-      label: '上月', 
-      getValue: () => [dayjs().subtract(1, 'month').startOf('month').toDate(), dayjs().subtract(1, 'month').endOf('month').toDate()] as [Date, Date]
-    },
-  ]
+  // 生成年份列表（最近5年）
+  const years = Array.from({ length: 5 }, (_, i) => dayjs().year() - i)
 
-  // 获取当前选中的日期范围标签
-  const getCurrentRangeLabel = () => {
-    if (!startDate || !endDate) return '快捷选择'
-    
-    const start = dayjs(startDate)
-    const end = dayjs(endDate)
-    
-    for (const range of quickRanges) {
-      const [rangeStart, rangeEnd] = range.getValue()
-      if (start.isSame(dayjs(rangeStart), 'day') && end.isSame(dayjs(rangeEnd), 'day')) {
-        return range.label
-      }
-    }
-    return '自定义'
-  }
-
-  // 修改handleQuickRangeSelect的类型
-  const handleQuickRangeSelect = (range: QuickRange) => {
-    const [start, end] = range.getValue()
-    handleDateRangeChange([start, end])
-  }
+  // 生成月份列表
+  const months = Array.from({ length: 12 }, (_, i) => i + 1)
 
   if (isLoading) {
     return (
@@ -284,65 +230,27 @@ function PerformanceDetailContent() {
 
       {/* 总账单 */}
       <div className="bg-white px-4 py-6 mb-4 bg-cyan-50 rounded-md">
-      <div>
-      <div className="flex items-center justify-between mb-4">
-            <Menu as="div" className="relative">
-              <Menu.Button className="min-w-[100px] px-4 py-2 text-sm bg-white rounded-lg border border-gray-300 hover:bg-gray-50 flex items-center justify-between">
-                <span>{getCurrentRangeLabel()}</span>
-                <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                </svg>
-              </Menu.Button>
-              <Menu.Items className="absolute left-0 mt-2 w-40 bg-white rounded-md shadow-lg border border-gray-200 z-50">
-                <div className="py-1">
-                  {quickRanges.map((range) => {
-                    const [rangeStart, rangeEnd] = range.getValue()
-                    const isSelected = startDate && endDate && 
-                      dayjs(startDate).isSame(dayjs(rangeStart), 'day') && 
-                      dayjs(endDate).isSame(dayjs(rangeEnd), 'day')
-                    
-                    return (
-                      <Menu.Item key={range.label}>
-                        {({ active }) => (
-                          <button
-                            className={`${
-                              active ? 'bg-gray-100' : ''
-                            } w-full text-left px-4 py-2 text-sm ${
-                              isSelected ? 'text-blue-600 font-medium' : 'text-gray-700'
-                            } flex items-center justify-between`}
-                            onClick={() => handleQuickRangeSelect(range)}
-                          >
-                            <span>{range.label}</span>
-                            {isSelected && (
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                              </svg>
-                            )}
-                          </button>
-                        )}
-                      </Menu.Item>
-                    )
-                  })}
-                </div>
-              </Menu.Items>
-            </Menu>
-            
-            <DatePicker
-              selectsRange={true}
-              startDate={startDate}
-              endDate={endDate}
-              onChange={handleDateRangeChange}
-              dateFormat="MM/dd"
-              className="appearance-none bg-white border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholderText="选择日期范围"
-              isClearable={true}
-              locale="zh-CN"
-              maxDate={new Date()}
-            />
-          </div></div>
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            {/* 年月选择器 */}
+            <button
+              onClick={() => setShowYearMonthPicker(true)}
+              className="flex items-center px-4 py-2 bg-white rounded-lg border border-gray-300 hover:bg-gray-50 shadow-sm"
+            >
+              <svg className="w-5 h-5 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <span className="text-base font-medium text-gray-900">
+                {selectedYear}年{selectedMonth}月
+              </span>
+              <svg className="w-4 h-4 ml-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+          </div>
+        </div>
         <div className="flex justify-between items-center mb-2">
           <div className="text-2xl font-bold">总账单</div>
-          
         </div>
         <div className="text-3xl font-bold">{totalAmount.toFixed(2)} 元</div>
       </div>
@@ -405,6 +313,73 @@ function PerformanceDetailContent() {
         </div>
 
       </div>
+
+      {/* 年月选择器弹窗 */}
+      {showYearMonthPicker && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end justify-center z-50">
+          <div className="bg-white w-full rounded-t-2xl p-6 animate-slide-up">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-lg font-semibold text-gray-900">选择年月</h3>
+              <button
+                onClick={() => setShowYearMonthPicker(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* 年份选择 */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-3">年份</label>
+              <div className="grid grid-cols-5 gap-2">
+                {years.map((year) => (
+                  <button
+                    key={year}
+                    onClick={() => setSelectedYear(year)}
+                    className={`py-3 px-4 rounded-lg text-center transition-colors ${
+                      selectedYear === year
+                        ? 'bg-blue-500 text-white font-semibold'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {year}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 月份选择 */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-3">月份</label>
+              <div className="grid grid-cols-4 gap-2">
+                {months.map((month) => (
+                  <button
+                    key={month}
+                    onClick={() => setSelectedMonth(month)}
+                    className={`py-3 px-4 rounded-lg text-center transition-colors ${
+                      selectedMonth === month
+                        ? 'bg-blue-500 text-white font-semibold'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {month}月
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 确认按钮 */}
+            <button
+              onClick={() => handleYearMonthChange(selectedYear, selectedMonth)}
+              className="w-full py-3 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 transition-colors"
+            >
+              确认
+            </button>
+          </div>
+        </div>
+      )}
     </div>
     // </Watermark>
   )

@@ -9,12 +9,13 @@ import {
   getCoreRowModel,
   useReactTable,
 } from '@tanstack/react-table'
-import { 
-  getEmployees, 
-  getEmployeePerformance, 
-  upsertPerformance, 
+import {
+  getEmployees,
+  getEmployeePerformance,
+  upsertPerformance,
   batchUpsertPerformance,
-  deleteEmployeeData 
+  deleteEmployeeData,
+  deleteEmployeeDataByMonth
 } from './actions'
 import dayjs from 'dayjs'
 
@@ -103,6 +104,9 @@ export default function Performance() {
   const [selectedEmployee, setSelectedEmployee] = useState('')
   const [editingData, setEditingData] = useState<PerformanceData | null>(null)
   const [employees, setEmployees] = useState<string[]>([])
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleteYear, setDeleteYear] = useState(new Date().getFullYear())
+  const [deleteMonth, setDeleteMonth] = useState(new Date().getMonth() + 1)
 
   // 加载员工列表
   useEffect(() => {
@@ -266,19 +270,33 @@ export default function Performance() {
       return
     }
 
-    if (confirm('确定要删除该员工的所有数据吗？')) {
-      setIsLoading(true)
-      const result = await deleteEmployeeData(selectedEmployee)
-      if (result.success) {
-        setData([])
+    setShowDeleteModal(true)
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!selectedEmployee) return
+
+    setIsLoading(true)
+    const result = await deleteEmployeeDataByMonth(selectedEmployee, deleteYear, deleteMonth)
+
+    if (result.success) {
+      alert(`成功删除 ${result.deletedCount} 条数据`)
+      // 刷新数据
+      const updatedData = await getEmployeePerformance(selectedEmployee)
+      setData(updatedData)
+
+      // 如果该员工没有数据了，刷新员工列表
+      if (updatedData.length === 0) {
         setSelectedEmployee('')
         const employeeList = await getEmployees()
         setEmployees(employeeList)
-      } else {
-        alert(result.error)
       }
-      setIsLoading(false)
+    } else {
+      alert(result.error)
     }
+
+    setIsLoading(false)
+    setShowDeleteModal(false)
   }
 
   const handleEditSubmit = async (e: React.FormEvent) => {
@@ -583,6 +601,90 @@ export default function Performance() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 删除确认弹窗 */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium text-gray-900">删除数据</h3>
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(false)}
+                className="text-gray-400 hover:text-gray-500"
+              >
+                <span className="sr-only">关闭</span>
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="mb-4">
+              <p className="text-sm text-gray-700 mb-4">
+                请选择要删除的年月：
+              </p>
+
+              <div className="grid grid-cols-2 gap-4">
+                {/* 年份选择 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">年份</label>
+                  <select
+                    value={deleteYear}
+                    onChange={(e) => setDeleteYear(parseInt(e.target.value))}
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  >
+                    {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - i).map(year => (
+                      <option key={year} value={year}>{year}年</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 月份选择 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">月份</label>
+                  <select
+                    value={deleteMonth}
+                    onChange={(e) => setDeleteMonth(parseInt(e.target.value))}
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  >
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
+                      <option key={month} value={month}>{month}月</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                <p className="text-sm text-yellow-800">
+                  将删除 <span className="font-semibold">{selectedEmployee}</span> 在
+                  <span className="font-semibold"> {deleteYear}年{deleteMonth}月 </span>
+                  的所有数据，此操作不可恢复！
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(false)}
+                disabled={isLoading}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={isLoading}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? '删除中...' : '确认删除'}
+              </button>
+            </div>
           </div>
         </div>
       )}
